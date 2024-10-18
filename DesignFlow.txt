@@ -1,0 +1,178 @@
+Models
+1) User
+ + Id 
+ + Full Name - String (VARCHAR(200))
+ + Email - Email
+ + Phone Number (Must begin with +)
+ + Created On - DateTime
+ + Updated At - DateTime
+ + Role (Patient, Admin, Doctor)
+
+- Patient
+ # Personal Information
+  + Date of Birth - DateTime
+  + Gender - (Male, Female or Others)
+  + Address - (VARCHAR(100))
+  + Occupation - (VARCHAR(50))
+  + Emergency Contact Name - (VARCHAR(50))
+  + Emergency Phone Number - (Must begin with +)
+ # Medical Information
+  + Primary Care Physician (Doctor - User Id)
+  + Insurance Provider - String (VARCHAR(150))
+  + Insurance Policy Number - String (VARCHAR(50))
+  + Allergies - Optional - String (TEXT)
+  + Current Medications - String (TEXT)
+  + Family medical history - String (TEXT)
+  + Past Medical History - String (TEXT)
+ # Identification and Verification
+  + Identification Type - String (VARCHAR(50))
+  + Identification Number - String (VARCHAR(50))
+  + Copy of Identification Document - String URL (VARCHAR(150))
+ # Consent and Privacy
+  + Disclosure of my health info - Boolean (True or False)
+
+- Doctor
+ + Appointments (List of Appointments)
+ + User Id (User Id)
+
+- Admin
+   
+------------- REFINED SQL -----------------
+User (
+    Id INT PRIMARY KEY,
+    FullName VARCHAR(200),
+    Email VARCHAR(200),
+    PhoneNumber VARCHAR(20),
+    CreatedOn DATETIME,
+    UpdatedAt DATETIME,
+    Role ENUM('Patient', 'Admin', 'Doctor'),
+    CONSTRAINT chk_phone_number CHECK (PhoneNumber LIKE '+%')
+)
+
+Patient (
+    UserId INT PRIMARY KEY,  -- Foreign key to User table
+    DateOfBirth DATETIME,
+    Gender ENUM('Male', 'Female', 'Others'),
+    Address VARCHAR(100),
+    Occupation VARCHAR(50),
+    EmergencyContactName VARCHAR(50),
+    EmergencyPhoneNumber VARCHAR(20),
+    PrimaryCarePhysician INT,  -- Foreign key to Doctor (UserId)
+    InsuranceProvider VARCHAR(150),
+    InsurancePolicyNumber VARCHAR(50),
+    Allergies TEXT,
+    CurrentMedications TEXT,
+    FamilyMedicalHistory TEXT,
+    PastMedicalHistory TEXT,
+    IdentificationType VARCHAR(50),
+    IdentificationNumber VARCHAR(50),
+    IdentificationDocumentURL VARCHAR(150),
+    DisclosureOfHealthInfo BOOLEAN,
+    CONSTRAINT chk_emergency_phone CHECK (EmergencyPhoneNumber LIKE '+%'),
+    FOREIGN KEY (UserId) REFERENCES User(Id),
+    FOREIGN KEY (PrimaryCarePhysician) REFERENCES User(Id)
+)
+
+Doctor (
+    UserId INT PRIMARY KEY,  -- Foreign key to User table
+    -- Additional doctor-specific fields if needed in the future
+    FOREIGN KEY (UserId) REFERENCES User(Id)
+)
+
+Admin (
+    UserId INT PRIMARY KEY,  -- Foreign key to User table
+    -- Additional admin-specific fields if needed
+    FOREIGN KEY (UserId) REFERENCES User(Id)
+)
+
+------------------------------------------------------------------------
+
+2) Appointment
+ + Appointment Id - INT
+ + Doctor (User Id) 
+ + Reason for appointment - String (TEXT)
+ + Additional Comments - String (VARCHAR(200))
+ + Expected Appointment Date - DateTime
+ + Patient (User Id)
+ + Status (Scheduled / Pending / Cancelled)
+ + Created On - Date Time
+ + Updated At - Date Time
+ + Reason for Cancellation - String (Text)
+
+------------- REFINED SQL ----------------------
+Appointment (
+    AppointmentId INT PRIMARY KEY,
+    DoctorId INT,  -- Foreign key to User table (Doctor)
+    PatientId INT, -- Foreign key to User table (Patient)
+    ReasonForAppointment TEXT,
+    AdditionalComments VARCHAR(200),
+    ExpectedAppointmentDate DATETIME,
+    Status ENUM('Scheduled', 'Pending', 'Cancelled'),
+    CreatedOn DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    ReasonForCancellation TEXT,  -- Only if Status is 'Cancelled'
+    FOREIGN KEY (DoctorId) REFERENCES User(Id),
+    FOREIGN KEY (PatientId) REFERENCES User(Id),
+    CONSTRAINT chk_status_reason CHECK (
+        (Status = 'Cancelled' AND ReasonForCancellation IS NOT NULL) OR
+        (Status != 'Cancelled' AND ReasonForCancellation IS NULL)
+    )
+)
+
+3) Token
+- Id
+- Source (Phone number or Email)
+- Token
+- Expires On - DateTime
+- Created At
+- Updated On
+- User id
+
+-------------- REFINED SQL ----------------
+Token (
+    Id INT PRIMARY KEY AUTO_INCREMENT,  -- Unique identifier for each token
+    Source ENUM('Phone', 'Email'),      -- Specifies the source (either Phone or Email)
+    Token VARCHAR(255) UNIQUE,          -- The token itself, making it unique
+    ExpiresOn DATETIME,                 -- The expiration date/time of the token
+    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,  -- Token creation timestamp
+    UpdatedOn DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,  -- Automatically updated
+    UserId INT,                         -- Foreign key referencing the User table
+    FOREIGN KEY (UserId) REFERENCES User(Id) ON DELETE CASCADE  -- Enforce foreign key relationship with User
+)
+
+-----------------------------------------------------------
+
+Controllers
+- AccountController
+ + Create User
+ + Send token via email or sms
+
+[Authorize(Roles = "Doctor")]
+
+public class SecretService : ISecretService
+{
+    private readonly IConfiguration _configuration;
+
+    public SecretService(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    public bool ValidateSecret(string secret)
+    {
+        var storedSecret = _configuration["AdminSettings:SecretKey"];
+        return storedSecret == secret;
+    }
+}
+
+private readonly ILogger<AccountController> _logger;
+
+public AccountController(UserManager<User> userManager, IEmailService emailService, ILogger<AccountController> logger)
+{
+    _userManager = userManager;
+    _emailService = emailService;
+    _logger = logger;
+}
+_logger.LogInformation("Attempting to register user with email: {Email}", registerDto.Email);
+// Log any errors or successful registrations
+_logger.LogError("Error creating user: {Errors}", string.Join(", ", createdUser.Errors));
