@@ -10,7 +10,6 @@ using backend.Interfaces;
 using backend.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace backend.Controllers
 {
@@ -20,13 +19,15 @@ namespace backend.Controllers
     public class AccountController : ControllerBase
     {
         private readonly UserManager<User> _userManager;
+        private readonly SignInManager<User> _signInManager;
         private readonly IEmailService _emailService;
         private readonly ISMSService _smsService;
         private readonly ITokenService _tokenService;
         private readonly ISecretService _secretService;
-        public AccountController(UserManager<User> userManager, IEmailService emailService, ISMSService smsService, ITokenService tokenService, ISecretService secretService)
+        public AccountController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailService emailService, ISMSService smsService, ITokenService tokenService, ISecretService secretService)
         {
             _userManager = userManager;
+            _signInManager = signInManager;
             _emailService = emailService;
             _smsService = smsService;
             _tokenService = tokenService;
@@ -36,22 +37,21 @@ namespace backend.Controllers
         private async Task SendConfirmationEmail(string email, User user)
         {
             var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var otp = token.Split(':')[0];
 
             await _emailService.SendEmailAsync(new SendEmailObject
             {
                 ToEmail = email,
                 Subject = "Confirm Your Email",
-                Body = $"<p>Dear {user.FullName},</p><br/><p>Your OTP Code for verifying your account is {otp}.</p>"
+                Body = $"<p>Dear {user.FullName},</p><br/><p>Your OTP Code for verifying your account is {token}.</p>"
             });
         }
 
         private async Task<bool> SendPhoneVerificationCode(string phone, User user)
         {
             var token = await _userManager.GenerateChangePhoneNumberTokenAsync(user, phone);
-            var otp = token.Split(':')[0];
 
-            var result = await _smsService.SendSmsAsync(phone, $"Your OTP code is {otp}");
+            Console.WriteLine(phone[1..]);
+            var result = await _smsService.SendSmsAsync(phone[1..], $"Your OTP code is {token}");
             return result;
         }
 
@@ -111,6 +111,32 @@ namespace backend.Controllers
                 Console.WriteLine(e);
                 return StatusCode(500, e);
             }
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _userManager.FindByEmailAsync(loginDto.Email);
+            if (user == null ||
+                    !string.Equals(user.PhoneNumber, loginDto.PhoneNumber, StringComparison.OrdinalIgnoreCase))
+                return Ok(new
+                {
+                    Message = "Invalid or Incorrect Credentials"
+                });
+
+            await SendConfirmationEmail(loginDto.Email, user);
+
+            return Ok(
+                new NewUserDto
+                {
+                    Id = user.Id,
+                    UserName = user.UserName,
+                    Message = "Code has been sent to your token"
+                }
+            );
         }
 
         [HttpGet("confirm-email")]
@@ -195,6 +221,42 @@ namespace backend.Controllers
             );
         }
 
+        [HttpGet("confirm-login")]
+        public async Task<IActionResult> ConfirmLogin([FromQuery] ConfirmObject confirmObject)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _userManager.FindByIdAsync(confirmObject.UserId);
+            if (user == null)
+                return BadRequest("User not found");
+
+            var result = await _userManager.ConfirmEmailAsync(user, confirmObject.Token);
+            if (!result.Succeeded)
+                return BadRequest("Invalid or Expired OTP");
+
+            await _signInManager.SignInAsync(user, isPersistent: false);
+
+            var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
+            if (role == null)
+                return BadRequest("User does not have a role");
+
+            return Ok(
+                new ConfirmLoginDto
+                {
+                    Id = user.Id,
+                    FullName = user.FullName,
+                    UserName = user.UserName,
+                    Email = user.Email,
+                    EmailConfirmed = user.EmailConfirmed,
+                    PhoneNumber = user.PhoneNumber,
+                    PhoneNumberConfirmed = user.PhoneNumberConfirmed,
+                    Role = role,
+                    Token = _tokenService.CreateToken(user, role),
+                    Message = "Login Successful"
+                });
+        }
+
         [HttpPost("resend-email")]
         public async Task<IActionResult> ResendEmail([FromBody] ResendEmailDto emailDto)
         {
@@ -224,7 +286,8 @@ namespace backend.Controllers
                 return BadRequest(ModelState);
 
             var user = await _userManager.FindByEmailAsync(phoneDto.Email);
-            if (user == null || await _userManager.IsPhoneNumberConfirmedAsync(user))
+            if (user == null ||
+                    !string.Equals(user.PhoneNumber, phoneDto.PhoneNumber, StringComparison.OrdinalIgnoreCase) || await _userManager.IsPhoneNumberConfirmedAsync(user))
                 return Ok(new
                 {
                     Message = "Phone number already Confirmed"
