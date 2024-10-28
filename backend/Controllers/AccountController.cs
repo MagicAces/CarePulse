@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using backend.DTOs;
 using backend.DTOs.Account;
 using backend.DTOs.Error;
+using backend.Extensions;
 using backend.Helpers;
 using backend.Interfaces;
 using backend.Models;
@@ -29,8 +30,9 @@ namespace backend.Controllers
         private readonly ISecretService _secretService;
         private readonly IPatientRepository _patientRepo;
         private readonly IDoctorRepository _doctorRepo;
+        private readonly IConfiguration _config;
         public AccountController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailService emailService, ISMSService smsService, ITokenService tokenService, ISecretService secretService,
-        IPatientRepository patientRepo, IDoctorRepository doctorRepo)
+        IPatientRepository patientRepo, IDoctorRepository doctorRepo, IConfiguration config)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -40,6 +42,7 @@ namespace backend.Controllers
             _secretService = secretService;
             _patientRepo = patientRepo;
             _doctorRepo = doctorRepo;
+            _config = config;
         }
 
         private async Task SendConfirmationEmail(string email, User user)
@@ -195,6 +198,17 @@ namespace backend.Controllers
                 SMSMessage = sent ? $"OTP Code sent to {user.PhoneNumber}" : $"SMS Code could not be sent. Try again";
             }
 
+            var accessToken = _tokenService.CreateAccessToken(user, role);
+            var refreshToken = _tokenService.CreateRefreshToken(user);
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = _config["Mode"] == "production",
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(7)
+            };
+            Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+
             return Ok(
                 new ConfirmEmailDto
                 {
@@ -207,7 +221,7 @@ namespace backend.Controllers
                     Role = role,
                     SMSSent = sent,
                     SMSMessage = SMSMessage,
-                    Token = _tokenService.CreateToken(user, role),
+                    Token = accessToken,
                     Message = "Email Confirmed Successfully"
                 }
             );
@@ -234,6 +248,17 @@ namespace backend.Controllers
             if (role == null)
                 return BadRequest("User does not have a role");
 
+            var accessToken = _tokenService.CreateAccessToken(user, role);
+            var refreshToken = _tokenService.CreateRefreshToken(user);
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = _config["Mode"] == "production",
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(7)
+            };
+            Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+
             return Ok(
                 new ConfirmPhoneDto
                 {
@@ -245,7 +270,7 @@ namespace backend.Controllers
                     PhoneNumber = user.PhoneNumber,
                     PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                     Role = role,
-                    Token = _tokenService.CreateToken(user, role),
+                    Token = accessToken,
                     Message = "Phone Number Confirmed Successfully"
                 }
             );
@@ -282,15 +307,13 @@ namespace backend.Controllers
             }
 
             var accessToken = _tokenService.CreateAccessToken(user, role);
-            var refreshToken = _tokenService.CreateRefreshToken();
-
-
+            var refreshToken = _tokenService.CreateRefreshToken(user);
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true,
-                Secure = true, 
+                Secure = _config["Mode"] == "production",
                 SameSite = SameSiteMode.Strict,
-                Expires = DateTime.UtcNow.AddDays(7) 
+                Expires = DateTime.UtcNow.AddDays(7)
             };
             Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
 
@@ -305,7 +328,7 @@ namespace backend.Controllers
                     PhoneNumber = user.PhoneNumber,
                     PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                     Role = role,
-                    Token = _tokenService.CreateAccessToken(user, role),
+                    Token = accessToken,
                     UserDetails = userDetails,
                     Message = "Login Successful"
                 });
@@ -357,19 +380,40 @@ namespace backend.Controllers
         }
 
         [HttpPost("logout")]
-        [Authorize]
         public async Task<IActionResult> Logout()
         {
-            var userId = User.FindFirstValue(JwtRegisteredClaimNames.NameId);
-            if (userId == null)
-            {
-                return BadRequest("User not found");
-            }
-
-            await _tokenService.RevokeRefreshTokenAsync(userId);
             await _signInManager.SignOutAsync();
-
+            Response.Cookies.Append("refreshToken", "", new CookieOptions
+            {
+                Expires = DateTime.UtcNow.AddDays(-1), // Expire immediately
+                HttpOnly = true,
+                Secure = _config["Mode"] == "production",
+                SameSite = SameSiteMode.Strict
+            });
             return Ok(new { Message = "Logged out successfully" });
         }
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> RefreshToken()
+        {
+            var refreshToken = Request.Cookies["refreshToken"];
+            Console.WriteLine(refreshToken);
+            if (refreshToken == null) return Unauthorized("Refresh token missing");
+
+            var userId = _tokenService.ValidateRefreshToken(refreshToken);
+            Console.WriteLine(userId);
+            if (userId == null) return Unauthorized("Invalid or expired refresh token");
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return Unauthorized("User not found");
+            var role = (await _userManager.GetRolesAsync(user)).FirstOrDefault();
+            if (role == null)
+                return BadRequest("User does not have a role");
+
+            var newAccessToken = _tokenService.CreateAccessToken(user, role);
+            return Ok(new { accessToken = newAccessToken });
+        }
+
     }
 }

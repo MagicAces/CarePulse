@@ -10,7 +10,7 @@ namespace backend.Interfaces
     public interface ITokenService
     {
         string CreateAccessToken(User user, string userRole);
-        string CreateRefreshToken();
-        ClaimsPrincipal GetPrincipalFromExpiredToken(string token);
+        string CreateRefreshToken(User user);
+        string? ValidateRefreshToken(string token);
     }
 }
