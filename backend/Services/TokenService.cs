@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using backend.Interfaces;
 using backend.Models;
 using Microsoft.IdentityModel.Tokens;
+using Vonage;
 
 namespace backend.Services
 {
@@ -23,11 +25,12 @@ namespace backend.Services
             _key = _secretService.GenerateKey();
         }
 
-        public string CreateToken(User user, string userRole)
+        public string CreateAccessToken(User user, string userRole)
         {
             var claims = new List<Claim> {
                 new(JwtRegisteredClaimNames.Email, user.Email),
                 new(JwtRegisteredClaimNames.Name, user.UserName),
+                new(JwtRegisteredClaimNames.NameId, user.Id),
                 new(JwtRegisteredClaimNames.GivenName, user.FullName),
                 new(ClaimTypes.Role, userRole)
             };
@@ -37,7 +40,7 @@ namespace backend.Services
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.Now.AddDays(1),
+                Expires = DateTime.Now.AddMinutes(15),
                 SigningCredentials = creds,
                 Issuer = _config["JWT:Issuer"],
                 Audience = _config["JWT:Audience"]
@@ -48,5 +51,31 @@ namespace backend.Services
 
             return tokenHandler.WriteToken(token);
         }
+
+        public string CreateRefreshToken()
+        {
+            var randomBytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomBytes);
+            }
+            return Convert.ToBase64String(randomBytes);
+        }
+
+        public ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = _key,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ClockSkew = TimeSpan.Zero,
+                ValidateLifetime = false // We want to get claims from an expired token
+            }, out SecurityToken validatedToken);
+
+            return principal;
+        } 
     }
 }

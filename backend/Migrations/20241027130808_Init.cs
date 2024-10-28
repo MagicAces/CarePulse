@@ -225,15 +225,15 @@ namespace backend.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
+                    PatientId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    DoctorId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     ReasonForAppointment = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     AdditionalComments = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ReasonForCancellation = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ReasonForCancellation = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ExpectedAppointmentDate = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedOn = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    PatientId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    DoctorId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     DoctorUserId = table.Column<string>(type: "nvarchar(450)", nullable: true)
                 },
                 constraints: table =>
@@ -265,9 +265,9 @@ namespace backend.Migrations
                 columns: new[] { "Id", "ConcurrencyStamp", "Name", "NormalizedName" },
                 values: new object[,]
                 {
-                    { "727a8f6e-840b-4311-a0ec-71cfaefd1486", null, "Admin", "ADMIN" },
-                    { "b60c5935-bcba-4cb7-b864-d78f49915039", null, "Doctor", "DOCTOR" },
-                    { "bfebdf4f-8bb5-47c1-8463-ccf99e4a60be", null, "Patient", "PATIENT" }
+                    { "556fac79-0f57-4e9e-8d28-664f29b342f7", null, "Patient", "PATIENT" },
+                    { "578c49f0-df51-4bbe-b121-dc9777fe0fcd", null, "Doctor", "DOCTOR" },
+                    { "cb3cf168-bb63-4a3a-9e63-fb09a385a49e", null, "Admin", "ADMIN" }
                 });
 
             migrationBuilder.CreateIndex(

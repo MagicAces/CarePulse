@@ -17,6 +17,6 @@ namespace backend.DTOs
         public string? PhoneNumber { get; set; }
 
         [EnumDataType(typeof(UserRole), ErrorMessage = "Role must be either Admin or Doctor.")]
-        public UserRole Role { get; set; } = UserRole.Admin;
+        public UserRole? Role { get; set; } = UserRole.Admin;
     }
 }

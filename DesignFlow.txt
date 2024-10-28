@@ -176,3 +176,42 @@ public AccountController(UserManager<User> userManager, IEmailService emailServi
 _logger.LogInformation("Attempting to register user with email: {Email}", registerDto.Email);
 // Log any errors or successful registrations
 _logger.LogError("Error creating user: {Errors}", string.Join(", ", createdUser.Errors));
+
+
+Distributed Locks
+RedLock.Net
+public async Task<string> GetTokenAsync(string key)
+{
+    var redLock = await _redLockFactory.CreateLockAsync(key, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(10));
+    if (redLock.IsAcquired)
+    {
+        try
+        {
+            var token = await _redisDatabase.StringGetAsync(key);
+            await _redisDatabase.KeyDeleteAsync(key);
+            return token;
+        }
+        finally
+        {
+            await redLock.ReleaseAsync();
+        }
+    }
+    
+    return null; // Lock was not acquired
+}
+
+
+Patient
+- GetById
+- UpdatePatient - Register/Update Patient Profile for only patient role
+
+
+Doctor
+- GetTopFiveDoctors - doctors ?limit=x For only patients and admins
+- GetAllAppointments = Get all appointments for a doctor for only doctors
+
+Appointment
+- Get all appointments - limit=x&sort=y&order=z&filter=w for admin stats on how many scheduled, pending and cancelled.
+- Request appointment - Create appointement for patient
+- Update appointment - Cancel or schedule for admin
+

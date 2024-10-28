@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.Data;
 
@@ -11,9 +12,11 @@ using backend.Data;
 namespace backend.Migrations
 {
     [DbContext(typeof(ApplicationDBContext))]
-    partial class ApplicationDBContextModelSnapshot : ModelSnapshot
+    [Migration("20241027130808_Init")]
+    partial class Init
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -51,19 +54,19 @@ namespace backend.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "02f0fafe-5ffe-404b-998c-9895e87067de",
+                            Id = "cb3cf168-bb63-4a3a-9e63-fb09a385a49e",
                             Name = "Admin",
                             NormalizedName = "ADMIN"
                         },
                         new
                         {
-                            Id = "be1524a1-2561-453d-8e01-47ad77955c6f",
+                            Id = "578c49f0-df51-4bbe-b121-dc9777fe0fcd",
                             Name = "Doctor",
                             NormalizedName = "DOCTOR"
                         },
                         new
                         {
-                            Id = "78f0b83c-4bd1-49a8-8b5f-d56648be0a2c",
+                            Id = "556fac79-0f57-4e9e-8d28-664f29b342f7",
                             Name = "Patient",
                             NormalizedName = "PATIENT"
                         });
@@ -194,6 +197,9 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("DoctorUserId")
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("ExpectedAppointmentDate")
                         .HasColumnType("datetime2");
 
@@ -218,6 +224,8 @@ namespace backend.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DoctorId");
+
+                    b.HasIndex("DoctorUserId");
 
                     b.HasIndex("PatientId");
 
@@ -458,10 +466,14 @@ namespace backend.Migrations
             modelBuilder.Entity("backend.Models.Appointment", b =>
                 {
                     b.HasOne("backend.Models.Doctor", "Doctor")
-                        .WithMany("Appointments")
+                        .WithMany()
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("backend.Models.Doctor", null)
+                        .WithMany("Appointments")
+                        .HasForeignKey("DoctorUserId");
 
                     b.HasOne("backend.Models.Patient", "Patient")
                         .WithMany()

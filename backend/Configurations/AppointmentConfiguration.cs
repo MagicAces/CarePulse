@@ -11,6 +11,8 @@ namespace backend.Configurations
         {
             builder.HasKey(a => a.Id);
 
+            builder.Property(a => a.ReasonForCancellation)
+                .IsRequired(false);
             builder.Property(a => a.Status)
                 .IsRequired();
             builder.Property(a => a.Status)
@@ -20,10 +22,10 @@ namespace backend.Configurations
                 );
 
             builder.HasOne(a => a.Doctor)
-                .WithMany()
+                .WithMany(a => a.Appointments)
                 .HasForeignKey(a => a.DoctorId)
                 .OnDelete(DeleteBehavior.Restrict);
-            builder.HasOne(a => a.Patient)  
+            builder.HasOne(a => a.Patient)
                 .WithMany()
                 .HasForeignKey(a => a.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
@@ -31,7 +33,7 @@ namespace backend.Configurations
             builder.ToTable(b => b.HasCheckConstraint("CK_Status_Reason",
                 "(Status = 'Cancelled' AND ReasonForCancellation IS NOT NULL) OR (Status != 'Cancelled' AND ReasonForCancellation IS NULL)"));
             builder.ToTable(b => b.HasCheckConstraint("CK_Expected_Appointment_Date",
-                "ExpectedAppointmentDate > GETDATE()")); 
+                "ExpectedAppointmentDate > GETDATE()"));
         }
     }
 }

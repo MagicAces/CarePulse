@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using backend.DTOs;
 using backend.DTOs.Account;
@@ -8,6 +10,7 @@ using backend.DTOs.Error;
 using backend.Helpers;
 using backend.Interfaces;
 using backend.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,7 +27,10 @@ namespace backend.Controllers
         private readonly ISMSService _smsService;
         private readonly ITokenService _tokenService;
         private readonly ISecretService _secretService;
-        public AccountController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailService emailService, ISMSService smsService, ITokenService tokenService, ISecretService secretService)
+        private readonly IPatientRepository _patientRepo;
+        private readonly IDoctorRepository _doctorRepo;
+        public AccountController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailService emailService, ISMSService smsService, ITokenService tokenService, ISecretService secretService,
+        IPatientRepository patientRepo, IDoctorRepository doctorRepo)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -32,6 +38,8 @@ namespace backend.Controllers
             _smsService = smsService;
             _tokenService = tokenService;
             _secretService = secretService;
+            _patientRepo = patientRepo;
+            _doctorRepo = doctorRepo;
         }
 
         private async Task SendConfirmationEmail(string email, User user)
@@ -42,7 +50,19 @@ namespace backend.Controllers
             {
                 ToEmail = email,
                 Subject = "Confirm Your Email",
-                Body = $"<p>Dear {user.FullName},</p><br/><p>Your OTP Code for verifying your account is {token}.</p>"
+                Body = $"<p>Dear {user.FullName},</p><br/><p>Your OTP Code for verifying your account is {token}. It is valid for <strong>10</strong> minutes.</p>"
+            });
+        }
+
+        private async Task SendLoginEmail(string email, User user)
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+            await _emailService.SendEmailAsync(new SendEmailObject
+            {
+                ToEmail = email,
+                Subject = "Login Request Detected",
+                Body = $"<p>Dear {user.FullName},</p><br/><p>Your OTP Code for logging into your account is {token}. It is valid for <strong>10</strong> minutes.</p>"
             });
         }
 
@@ -95,6 +115,16 @@ namespace backend.Controllers
                         Errors = roleResult.Errors.Select(e => e.Description).ToList()
                     });
 
+                if (role == "Doctor")
+                {
+                    var newDoctor = new Doctor
+                    {
+                        UserId = user.Id,
+                        Appointments = []
+                    };
+                    await _doctorRepo.CreateAsync(newDoctor);
+                }
+
                 await SendConfirmationEmail(registerDto.Email, user);
 
                 return Ok(
@@ -127,7 +157,7 @@ namespace backend.Controllers
                     Message = "Invalid or Incorrect Credentials"
                 });
 
-            await SendConfirmationEmail(loginDto.Email, user);
+            await SendLoginEmail(loginDto.Email, user);
 
             return Ok(
                 new NewUserDto
@@ -241,6 +271,29 @@ namespace backend.Controllers
             if (role == null)
                 return BadRequest("User does not have a role");
 
+            object userDetails = null;
+            if (role == "Patient")
+            {
+                userDetails = await _patientRepo.GetByIdAsync(user.Id);
+            }
+            else if (role == "Doctor")
+            {
+                userDetails = await _doctorRepo.GetByIdAsync(user.Id);
+            }
+
+            var accessToken = _tokenService.CreateAccessToken(user, role);
+            var refreshToken = _tokenService.CreateRefreshToken();
+
+
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true, 
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTime.UtcNow.AddDays(7) 
+            };
+            Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+
             return Ok(
                 new ConfirmLoginDto
                 {
@@ -252,7 +305,8 @@ namespace backend.Controllers
                     PhoneNumber = user.PhoneNumber,
                     PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                     Role = role,
-                    Token = _tokenService.CreateToken(user, role),
+                    Token = _tokenService.CreateAccessToken(user, role),
+                    UserDetails = userDetails,
                     Message = "Login Successful"
                 });
         }
@@ -300,6 +354,22 @@ namespace backend.Controllers
                 UserName = user.UserName,
                 Message = sent ? "Phone Number Verification Code Sent" : "Code not sent. Try again later"
             });
+        }
+
+        [HttpPost("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            var userId = User.FindFirstValue(JwtRegisteredClaimNames.NameId);
+            if (userId == null)
+            {
+                return BadRequest("User not found");
+            }
+
+            await _tokenService.RevokeRefreshTokenAsync(userId);
+            await _signInManager.SignOutAsync();
+
+            return Ok(new { Message = "Logged out successfully" });
         }
     }
 }

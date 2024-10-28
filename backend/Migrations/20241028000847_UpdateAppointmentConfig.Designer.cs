@@ -12,8 +12,8 @@ using backend.Data;
 namespace backend.Migrations
 {
     [DbContext(typeof(ApplicationDBContext))]
-    [Migration("20241017171619_Init")]
-    partial class Init
+    [Migration("20241028000847_UpdateAppointmentConfig")]
+    partial class UpdateAppointmentConfig
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -54,19 +54,19 @@ namespace backend.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "727a8f6e-840b-4311-a0ec-71cfaefd1486",
+                            Id = "02f0fafe-5ffe-404b-998c-9895e87067de",
                             Name = "Admin",
                             NormalizedName = "ADMIN"
                         },
                         new
                         {
-                            Id = "b60c5935-bcba-4cb7-b864-d78f49915039",
+                            Id = "be1524a1-2561-453d-8e01-47ad77955c6f",
                             Name = "Doctor",
                             NormalizedName = "DOCTOR"
                         },
                         new
                         {
-                            Id = "bfebdf4f-8bb5-47c1-8463-ccf99e4a60be",
+                            Id = "78f0b83c-4bd1-49a8-8b5f-d56648be0a2c",
                             Name = "Patient",
                             NormalizedName = "PATIENT"
                         });
@@ -197,9 +197,6 @@ namespace backend.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("DoctorUserId")
-                        .HasColumnType("nvarchar(450)");
-
                     b.Property<DateTime>("ExpectedAppointmentDate")
                         .HasColumnType("datetime2");
 
@@ -212,7 +209,6 @@ namespace backend.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ReasonForCancellation")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Status")
@@ -225,8 +221,6 @@ namespace backend.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DoctorId");
-
-                    b.HasIndex("DoctorUserId");
 
                     b.HasIndex("PatientId");
 
@@ -467,14 +461,10 @@ namespace backend.Migrations
             modelBuilder.Entity("backend.Models.Appointment", b =>
                 {
                     b.HasOne("backend.Models.Doctor", "Doctor")
-                        .WithMany()
+                        .WithMany("Appointments")
                         .HasForeignKey("DoctorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("backend.Models.Doctor", null)
-                        .WithMany("Appointments")
-                        .HasForeignKey("DoctorUserId");
 
                     b.HasOne("backend.Models.Patient", "Patient")
                         .WithMany()

@@ -4,6 +4,7 @@ using backend.Filters;
 using backend.Interfaces;
 using backend.Models;
 using backend.Providers;
+using backend.Repository;
 using backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -57,6 +58,12 @@ builder.Services.AddControllers();
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new UserRoleConverter());
+    options.JsonSerializerOptions.Converters.Add(new PatientGenderConverter());
+    options.JsonSerializerOptions.Converters.Add(new AppointmentStatusConverter());
+});
+builder.Services.AddControllers().AddNewtonsoftJson(options =>
+{
+    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
 });
 
 builder.Services.AddDbContext<ApplicationDBContext>(options =>
@@ -112,6 +119,9 @@ builder.Services.AddTransient<ISMSService, SMSService>();
 builder.Services.AddTransient<IRedisService, RedisService>();
 builder.Services.AddScoped<ISecretService, SecretService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IDoctorRepository, DoctorRepository>();
+builder.Services.AddScoped<IAppointmentRepository, AppointmentRepository>();
 
 var app = builder.Build();
 
